@@ -1689,16 +1689,23 @@ public class VirtualMachineManagerImpl extends ManagerBase implements VirtualMac
             throw new CloudRuntimeException("Unable to delete vm snapshots for " + vm);
         }
 
-        // reload the vm object from db
-        vm = _vmDao.findByUuid(vmUuid);
-        try {
-            if (!stateTransitTo(vm, VirtualMachine.Event.DestroyRequested, vm.getHostId())) {
-                s_logger.debug("Unable to destroy the vm because it is not in the correct state: " + vm);
-                throw new CloudRuntimeException("Unable to destroy " + vm);
+        int transitionRetryCount = 2;
+        while(true) {
+            // reload the vm object from db
+            vm = _vmDao.findByUuid(vmUuid);
+            try {
+                if (!stateTransitTo(vm, VirtualMachine.Event.DestroyRequested, vm.getHostId())) {
+                    if(transitionRetryCount-- == 0) {
+                        s_logger.debug("Unable to destroy the vm because it is not in the correct state: " + vm);
+                        throw new CloudRuntimeException("Unable to destroy " + vm);
+                    }
+                } else {
+                    return;
+                }
+            } catch (final NoTransitionException e) {
+                s_logger.debug(e.getMessage());
+                throw new CloudRuntimeException("Unable to destroy " + vm, e);
             }
-        } catch (final NoTransitionException e) {
-            s_logger.debug(e.getMessage());
-            throw new CloudRuntimeException("Unable to destroy " + vm, e);
         }
     }
 
